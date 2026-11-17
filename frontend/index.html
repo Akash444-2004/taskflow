@@ -7,23 +7,7 @@
     <meta name="theme-color" content="#f7f8fa" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>TaskFlow — Collaborative Project Management</title>
-    <script>
-      (function () {
-        try {
-          var key = "taskflow-theme";
-          var saved = localStorage.getItem(key);
-          var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-          var isDark = saved === "dark" || (!saved && prefersDark);
-          document.documentElement.classList.toggle("dark", isDark);
-          document.documentElement.style.colorScheme = isDark ? "dark" : "light";
-          document
-            .querySelector('meta[name="theme-color"]')
-            .setAttribute("content", isDark ? "#111827" : "#f7f8fa");
-        } catch (_) {
-          // Theme persistence is optional; the system preference remains the fallback.
-        }
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

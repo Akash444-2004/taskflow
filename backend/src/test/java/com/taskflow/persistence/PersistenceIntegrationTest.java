@@ -15,6 +15,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.taskflow.entity.Comment;
@@ -37,6 +38,7 @@ import com.taskflow.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 
 @SpringBootTest
+@ActiveProfiles("test")
 @Transactional
 class PersistenceIntegrationTest {
 

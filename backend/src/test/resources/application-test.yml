@@ -1,0 +1,10 @@
+app:
+  jwt:
+    issuer: taskflow-api
+    secret: OLJ+v9kMpc9EUdun1vfoqLgbdEmu2/cYJb343nv57cH1DeJZ0jxDFKw1nfkDwT+lJjrTw0Hi/iRB6vSsibuBCw==
+    access-token-ttl: PT15M
+    refresh-token-ttl: P7D
+  cookies:
+    secure: false
+    refresh-name: taskflow_refresh
+    refresh-path: /api/auth

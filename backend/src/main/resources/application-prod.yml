@@ -1,0 +1,24 @@
+# Production profile.
+# Activate with SPRING_PROFILES_ACTIVE=prod.
+# Every secret below must be supplied by the deployment environment.
+
+server:
+  forward-headers-strategy: framework
+
+app:
+  cookies:
+    # Production deployments are expected to terminate TLS. Set COOKIE_SECURE=false
+    # only for a private HTTP-only test environment.
+    secure: ${COOKIE_SECURE:true}
+
+logging:
+  level:
+    root: INFO
+    com.taskflow: INFO
+    org.hibernate.orm.jdbc.batch: WARN
+
+spring:
+  jpa:
+    properties:
+      hibernate:
+        generate_statistics: false
