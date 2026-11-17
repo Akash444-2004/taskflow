@@ -1,0 +1,27 @@
+# Environment and secrets
+**/.env
+!**/.env.example
+
+# Local development database
+.dev/
+
+# Java
+backend/target/
+*.class
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+*.log
+
+# IDE and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Test and tooling output
+coverage/
+.playwright/

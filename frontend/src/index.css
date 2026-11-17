@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --tf-canvas: 247 248 250;
+    --tf-surface: 255 255 255;
+    --tf-surface-raised: 255 255 255;
+    --tf-surface-muted: 241 243 246;
+    --tf-ink: 24 34 48;
+    --tf-muted: 104 115 133;
+    --tf-line: 230 233 239;
+    --tf-brand: 49 94 86;
+    --tf-brand-hover: 40 79 72;
+    --tf-brand-soft: 220 235 229;
+    --tf-brand-contrast: 255 255 255;
+    --tf-success: 30 122 87;
+    --tf-warning: 173 105 25;
+    --tf-danger: 180 55 55;
+    --tf-info: 47 104 151;
+  }
+
+  .dark {
+    color-scheme: dark;
+    --tf-canvas: 17 24 39;
+    --tf-surface: 21 31 46;
+    --tf-surface-raised: 27 39 55;
+    --tf-surface-muted: 31 44 61;
+    --tf-ink: 241 245 249;
+    --tf-muted: 154 168 184;
+    --tf-line: 44 57 74;
+    --tf-brand: 121 185 165;
+    --tf-brand-hover: 143 201 183;
+    --tf-brand-soft: 49 93 83;
+    --tf-brand-contrast: 13 31 27;
+    --tf-success: 101 196 154;
+    --tf-warning: 231 174 91;
+    --tf-danger: 235 137 137;
+    --tf-info: 132 179 219;
+  }
+
+  * {
+    border-color: rgb(var(--tf-line));
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+    background-color: rgb(var(--tf-canvas));
+    color: rgb(var(--tf-ink));
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    transition: background-color 180ms ease, color 180ms ease;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--tf-brand));
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: rgb(var(--tf-brand-soft));
+    color: rgb(var(--tf-ink));
+  }
+}
+
+@layer utilities {
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, rgb(var(--tf-line) / 0.55) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(var(--tf-line) / 0.55) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse 80% 65% at 50% 25%, black 30%, transparent 75%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
