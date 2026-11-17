@@ -2,7 +2,7 @@
 
 TaskFlow is a collaborative project and task management application for small teams. It is being built as a production-quality portfolio project with a Spring Boot API, PostgreSQL persistence, JWT authentication, and a responsive React interface.
 
-> **Current status: Phase 1 complete.** The repository, toolchain, database connection, theme foundation, tests, and production frontend build are verified. Domain features arrive in the next phases.
+> **Current status: Phase 2 complete.** The repository, toolchain, database connection, theme foundation, production frontend build, core PostgreSQL schema, entities, repositories, indexes, constraints, and persistence integration tests are verified. Authentication and API features arrive in the next phases.
 
 ## Architecture
 
@@ -51,17 +51,17 @@ taskflow/
 │   │   │   │   ├── config/          # Phase 3+
 │   │   │   │   ├── controller/      # HealthController now
 │   │   │   │   ├── dto/             # Phase 3+
-│   │   │   │   ├── entity/          # Phase 2+
-│   │   │   │   ├── enums/           # Phase 2+
+│   │   │   │   ├── entity/          # Complete core model
+│   │   │   │   ├── enums/           # Complete core enums
 │   │   │   │   ├── exception/       # Phase 3+
-│   │   │   │   ├── repository/      # Phase 2+
+│   │   │   │   ├── repository/      # Complete core repositories
 │   │   │   │   ├── security/        # Phase 3+
 │   │   │   │   ├── service/         # Phase 3+
 │   │   │   │   └── TaskFlowApplication.java
 │   │   │   └── resources/
-│   │   │       ├── db/migration/    # Phase 2+
+│   │   │       ├── db/migration/    # V1 and V2
 │   │   │       └── application.yml
-│   │   └── test/
+│   │   └── test/                    # Context + persistence tests
 │   ├── .env.example
 │   ├── mvnw
 │   ├── mvnw.cmd
@@ -199,6 +199,27 @@ npm run dev
 
 Spring Security is active from Phase 1, so all endpoints currently require authentication until the JWT configuration is implemented in Phase 3.
 
+## Database Schema
+
+The five core domain tables are defined by Flyway, plus a dedicated refresh-token table for secure session rotation.
+
+| Table | Purpose | Key integrity rules |
+| --- | --- | --- |
+| `users` | Registered accounts and status | Case-insensitive unique email, role check |
+| `projects` | Projects and ownership | Owner FK, status/date checks |
+| `project_members` | Project collaboration | Unique project/user pair, one OWNER |
+| `tasks` | Project tasks and assignments | Project/creator FKs, enum and date checks |
+| `comments` | Task discussion | Task cascade, author FK |
+| `refresh_tokens` | Hashed refresh sessions | Unique token hash, revocation timestamp |
+
+Important behaviors:
+
+- Deleting a project cascades its memberships, tasks, and task comments.
+- Deleting a task cascades its comments.
+- Users with project/task/comment history cannot be hard-deleted; accounts are disabled instead.
+- The task assignee must be a project member; this business rule is enforced in the service layer.
+- All associations are lazy and DTO mapping will use explicit projections/entity graphs.
+
 ## Verification
 
 ```powershell
@@ -211,20 +232,18 @@ npm run build
 npm audit --audit-level=moderate
 ```
 
-Phase 1 verification results:
+Phase 2 verification results:
 
-- Backend compiles and `TaskFlowApplicationTests.contextLoads` passes.
-- Hibernate connects to PostgreSQL 18.6 through HikariCP.
-- Flyway validates an empty migration history.
-- Frontend test passes under Vitest.
-- Vite production build succeeds.
-- Frontend and backend development servers both respond over HTTP.
-- `npm audit` reports zero vulnerabilities.
+- Flyway applied `V1` and `V2` successfully to PostgreSQL 18.6.
+- Hibernate validated every entity mapping using `ddl-auto=validate`.
+- 11 backend tests pass: application context, entity graph persistence, case-insensitive email uniqueness, duplicate membership prevention, single-owner enforcement, project and task cascades, user-history protection, accessible-project queries, assignment queries, and refresh-token revocation.
+- The live schema contains the expected indexes for email lookup, memberships, project ownership/status, task project/assignee/status/due-date filtering, comments, and refresh-token lookup.
+- Frontend tests, production build, and dependency audit remain clean.
 
 ## Roadmap
 
 - [x] **Phase 1** — Repository, Spring Boot, React/Vite, PostgreSQL, environment setup, runtime verification
-- [ ] **Phase 2** — Flyway schema, entities, enums, repositories, indexes, relationship tests
+- [x] **Phase 2** — Flyway schema, entities, enums, repositories, indexes, relationship tests
 - [ ] **Phase 3** — Registration, login, JWT, rotating refresh tokens, logout, authorization, error handling
 - [ ] **Phase 4** — Project CRUD, membership, ownership and member permissions
 - [ ] **Phase 5** — Task CRUD, assignment, status transitions, filters, pagination
