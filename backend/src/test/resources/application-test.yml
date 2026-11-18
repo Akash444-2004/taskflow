@@ -1,3 +1,12 @@
+spring:
+  # Integration tests never touch the real taskflow database.
+  # One-time setup in psql/pgAdmin:
+  #   CREATE DATABASE taskflow_test;
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/taskflow_test}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD}
+
 app:
   jwt:
     issuer: taskflow-api
