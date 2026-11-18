@@ -1,0 +1,79 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "TaskFlow: Run Backend",
+      "detail": "Starts the Spring Boot API. Prompts for the PostgreSQL password in the quick input.",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", "scripts/run-backend.ps1"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "TF_DB_PASSWORD": "${input:postgresPassword}"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "TaskFlow: Run Frontend",
+      "detail": "Starts the Vite dev server for the SPA.",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", "scripts/run-frontend.ps1"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "TaskFlow: Run Full Stack",
+      "detail": "Starts the backend (own window) and the frontend together. Prompts once for the PostgreSQL password.",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", "scripts/run-dev.ps1"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "TF_DB_PASSWORD": "${input:postgresPassword}"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "postgresPassword",
+      "type": "promptString",
+      "password": true,
+      "description": "PostgreSQL password for user 'postgres' (database 'taskflow')"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "taskflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TaskFlow workspace scripts: run backend, frontend, or the full stack.",
+  "scripts": {
+    "backend": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-backend.ps1",
+    "frontend": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-frontend.ps1",
+    "fullstack": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run-dev.ps1",
+    "stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-all.ps1"
+  }
+}

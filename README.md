@@ -157,42 +157,58 @@ After initial setup:
 
 The `.dev/` directory holds local database state and is git-ignored.
 
-### 2. Backend environment
+### 2. Run the stack
 
-Copy `backend/.env.example` to `backend/.env`, then set the database password and generate a JWT secret.
+Your PostgreSQL database is used directly (`localhost:5432`, database `taskflow`, user `postgres`). No local files ever store the database password.
 
-```powershell
-$bytes = New-Object byte[] 64
-[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-[Convert]::ToBase64String($bytes)
-```
+**From VS Code (recommended):** open the Command Palette (`Ctrl+Shift+P`) → **Tasks: Run Task** → pick one of:
 
-The secret must decode to at least 64 bytes because access tokens use HS512.
+| Task | What it does |
+| --- | --- |
+| `TaskFlow: Run Backend` | Prompts for your PostgreSQL password in the quick input, then starts the API on `http://localhost:8080` |
+| `TaskFlow: Run Frontend` | Starts the SPA on `http://localhost:5173` |
+| `TaskFlow: Run Full Stack` | Asks for the password once, runs pre-flight checks (PostgreSQL reachable, ports free, dependencies), then starts the backend and the frontend each in its own window and waits until the API reports healthy |
 
-### 3. Run the API
-
-```powershell
-cd backend
-.\mvnw.cmd spring-boot:run
-```
-
-The API starts on `http://localhost:8080`. Flyway applies migrations automatically on startup.
-
-### 4. Run the SPA
+**From a terminal:**
 
 ```powershell
-cd frontend
-npm install
-npm run dev
+npm run backend      # prompts (masked) for the PostgreSQL password
+npm run frontend     # or:
+npm run fullstack    # backend + frontend together
 ```
 
-The web app starts on `http://localhost:5173` and proxies `/api` to the backend during development.
+**Stopping:** run `scripts\stop-all.ps1` (or `npm run` equivalent) — it stops whatever is listening on ports 8080 and 5173 and never touches PostgreSQL. Output of both processes is also appended to `.dev\backend.out.log` and `.dev\frontend.out.log` for troubleshooting.
+
+Credential handling:
+
+- The database password is prompted at runtime (masked) and kept only in process memory; it is never written to disk.
+- The JWT signing secret is generated on first run and stored **DPAPI-encrypted** in `.dev/jwt.secret`, readable only by your Windows user on this machine.
+- The API starts on `http://localhost:8080`. Flyway applies migrations automatically on startup.
 
 Useful endpoints:
 
 - Web app: `http://localhost:5173`
 - API: `http://localhost:8080`
 - Health: `GET http://localhost:8080/api/health`
+
+### Integration tests
+
+Backend tests run against a separate `taskflow_test` database so your real data is never touched. Create it once:
+
+```sql
+CREATE DATABASE taskflow_test;
+```
+
+Then run with your password supplied through the environment:
+
+```powershell
+cd backend
+$secure = Read-Host "PostgreSQL password" -AsSecureString
+$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+try { $env:DB_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+.\mvnw.cmd test
+```
 
 ## Environment Variables
 
