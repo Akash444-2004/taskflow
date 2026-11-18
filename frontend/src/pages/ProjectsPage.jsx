@@ -10,7 +10,7 @@ import Input from "../components/ui/Input";
 import Modal from "../components/ui/Modal";
 import PageHeader from "../components/ui/PageHeader";
 import Select from "../components/ui/Select";
-import Spinner from "../components/ui/Spinner";
+import { SkeletonCards } from "../components/ui/Skeleton";
 import { useToast } from "../context/ToastContext";
 import { api, apiErrorMessage, fieldErrors } from "../services/api";
 import { PROJECT_STATUSES, PROJECT_STATUS_LABELS, percentage } from "../utils/format";
@@ -118,9 +118,7 @@ export default function ProjectsPage() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <Spinner className="h-7 w-7" label="Loading projects" />
-        </div>
+        <SkeletonCards count={6} />
       ) : error ? (
         <div className="rounded-card border border-danger/25 bg-danger/5 p-6 text-sm text-danger">
           {error}
@@ -174,7 +172,7 @@ export default function ProjectsPage() {
                   </div>
                   <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line">
                     <div
-                      className="h-full rounded-full bg-brand"
+                      className="h-full rounded-full bg-brand transition-all duration-700 ease-out"
                       style={{ width: `${progress}%` }}
                     />
                   </div>

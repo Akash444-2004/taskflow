@@ -83,6 +83,21 @@
     background-size: 32px 32px;
     mask-image: radial-gradient(ellipse 80% 65% at 50% 25%, black 30%, transparent 75%);
   }
+
+  @keyframes tf-fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-up {
+    animation: tf-fade-up 240ms ease-out both;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

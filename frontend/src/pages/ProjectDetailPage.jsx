@@ -25,7 +25,7 @@ import Input from "../components/ui/Input";
 import Modal from "../components/ui/Modal";
 import PageHeader from "../components/ui/PageHeader";
 import Select from "../components/ui/Select";
-import Spinner from "../components/ui/Spinner";
+import Skeleton, { SkeletonColumns } from "../components/ui/Skeleton";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { api, apiErrorMessage, fieldErrors } from "../services/api";
@@ -51,6 +51,20 @@ const COLUMN_TONES = {
   IN_PROGRESS: "border-t-info/60",
   COMPLETED: "border-t-success/60"
 };
+
+// Mirrors the backend transition rules (TaskService.validateTransition).
+const ALLOWED_TRANSITIONS = {
+  TODO: ["IN_PROGRESS"],
+  IN_PROGRESS: ["TODO", "COMPLETED"],
+  COMPLETED: ["IN_PROGRESS"]
+};
+
+function isTaskOverdue(task, today) {
+  if (!task.dueDate || task.status === "COMPLETED") return false;
+  const dueDate = new Date(task.dueDate);
+  dueDate.setHours(0, 0, 0, 0);
+  return dueDate < today;
+}
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams();
@@ -82,6 +96,8 @@ export default function ProjectDetailPage() {
   const [memberSubmitting, setMemberSubmitting] = useState(false);
   const [memberError, setMemberError] = useState("");
   const [actionBusy, setActionBusy] = useState("");
+  const [dragTaskId, setDragTaskId] = useState(null);
+  const [dragOverStatus, setDragOverStatus] = useState(null);
 
   const loadedTaskParam = useRef(null);
 
@@ -207,6 +223,31 @@ export default function ProjectDetailPage() {
     try {
       await Promise.all([loadProject(), loadMembers(), loadTasks()]);
     } catch (requestError) {
+      toast.error(apiErrorMessage(requestError));
+    }
+  }
+
+  async function moveTask(task, toStatus) {
+    if (task.status === toStatus) return;
+    if (!ALLOWED_TRANSITIONS[task.status]?.includes(toStatus)) {
+      toast.error(
+        `Tasks cannot move from "${TASK_STATUS_LABELS[task.status]}" to "${TASK_STATUS_LABELS[toStatus]}".`
+      );
+      return;
+    }
+
+    const previous = tasks;
+    // Optimistic move; revert on failure.
+    setTasks((current) =>
+      current.map((item) => (item.id === task.id ? { ...item, status: toStatus } : item))
+    );
+    try {
+      const { data } = await api.patch(`/tasks/${task.id}/status`, { status: toStatus });
+      setTasks((current) => current.map((item) => (item.id === data.id ? data : item)));
+      if (selectedTask?.id === data.id) setSelectedTask(data);
+      loadProject().catch(() => {});
+    } catch (requestError) {
+      setTasks(previous);
       toast.error(apiErrorMessage(requestError));
     }
   }
@@ -357,8 +398,14 @@ export default function ProjectDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-24">
-        <Spinner className="h-8 w-8" label="Loading project" />
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-64" />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-20 rounded-card" />
+          ))}
+        </div>
+        <SkeletonColumns count={3} />
       </div>
     );
   }
@@ -383,12 +430,34 @@ export default function ProjectDetailPage() {
     );
   }
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   const taskCard = (task) => {
     const canDelete = isOwner || task.createdBy.id === user?.id;
+    const overdue = isTaskOverdue(task, today);
+    const dueToday =
+      task.dueDate &&
+      task.status !== "COMPLETED" &&
+      new Date(task.dueDate).toDateString() === today.toDateString();
     return (
       <article
         key={task.id}
-        className="group rounded-xl border border-line bg-surface p-3.5 shadow-sm transition-all hover:border-brand/30 hover:shadow-card"
+        draggable
+        onDragStart={(event) => {
+          event.dataTransfer.setData("text/plain", String(task.id));
+          event.dataTransfer.effectAllowed = "move";
+          setDragTaskId(task.id);
+        }}
+        onDragEnd={() => {
+          setDragTaskId(null);
+          setDragOverStatus(null);
+        }}
+        className={`group rounded-xl border bg-surface p-3.5 shadow-sm transition-all hover:shadow-card ${
+          overdue ? "border-l-2 border-l-danger border-line" : "border-line"
+        } ${
+          dragTaskId === task.id ? "opacity-40" : "hover:border-brand/30"
+        }`}
       >
         <button
           type="button"
@@ -406,9 +475,18 @@ export default function ProjectDetailPage() {
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <TaskPriorityBadge priority={task.priority} />
           {task.dueDate ? (
-            <span className="inline-flex items-center gap-1 text-[11px] text-muted">
+            <span
+              className={`inline-flex items-center gap-1 text-[11px] ${
+                overdue ? "font-semibold text-danger" : "text-muted"
+              }`}
+            >
               <CalendarDays className="h-3 w-3" aria-hidden="true" />
               {formatDate(task.dueDate)}
+            </span>
+          ) : null}
+          {dueToday ? (
+            <span className="inline-flex items-center rounded-full bg-warning/10 px-2 py-0.5 text-[10px] font-semibold text-warning">
+              Due today
             </span>
           ) : null}
         </div>
@@ -496,7 +574,10 @@ export default function ProjectDetailPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Progress</p>
           <p className="mt-2 text-lg font-semibold text-ink">{progress}%</p>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line">
-            <div className="h-full rounded-full bg-brand" style={{ width: `${progress}%` }} />
+            <div
+              className="h-full rounded-full bg-brand transition-all duration-700 ease-out"
+              style={{ width: `${progress}%` }}
+            />
           </div>
         </div>
         <div className="rounded-card border border-line bg-surface p-4 shadow-card">
@@ -596,32 +677,62 @@ export default function ProjectDetailPage() {
       </div>
 
       {tab === "board" ? (
-        <div className="grid gap-4 lg:grid-cols-3">
-          {TASK_STATUSES.map((status) => (
-            <section
-              key={status}
-              className={cn(
-                "rounded-card border border-t-2 border-line bg-surface-muted/30 p-3",
-                COLUMN_TONES[status]
-              )}
-            >
-              <header className="flex items-center justify-between px-1 pb-3">
-                <h2 className="text-sm font-semibold text-ink">{TASK_STATUS_LABELS[status]}</h2>
-                <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-muted">
-                  {groupedTasks[status].length}
-                </span>
-              </header>
-              <div className="space-y-2.5">
-                {groupedTasks[status].length === 0 ? (
-                  <p className="rounded-xl border border-dashed border-line px-3 py-6 text-center text-xs text-muted">
-                    No tasks here.
-                  </p>
-                ) : (
-                  groupedTasks[status].map(taskCard)
+        <div className="space-y-3">
+          <p className="text-xs text-muted">
+            Tip: drag cards between columns to update their status.
+          </p>
+          <div className="grid gap-4 lg:grid-cols-3">
+          {TASK_STATUSES.map((status) => {
+            const isDropTarget = dragTaskId && dragOverStatus === status && dragTaskId;
+            const dropInvalid =
+              dragTaskId && dragOverStatus === status &&
+              !ALLOWED_TRANSITIONS[
+                tasks.find((task) => String(task.id) === String(dragTaskId))?.status
+              ]?.includes(status);
+            return (
+              <section
+                key={status}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setDragOverStatus(status);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const draggedId = event.dataTransfer.getData("text/plain") || dragTaskId;
+                  const draggedTask = tasks.find((task) => String(task.id) === draggedId);
+                  setDragTaskId(null);
+                  setDragOverStatus(null);
+                  if (draggedTask) {
+                    moveTask(draggedTask, status);
+                  }
+                }}
+                className={cn(
+                  "rounded-card border border-t-2 border-line bg-surface-muted/30 p-3 transition-all",
+                  COLUMN_TONES[status],
+                  isDropTarget && !dropInvalid && "bg-brand-soft/20 ring-2 ring-brand/40",
+                  isDropTarget && dropInvalid && "ring-2 ring-danger/40"
                 )}
-              </div>
-            </section>
-          ))}
+              >
+                <header className="flex items-center justify-between px-1 pb-3">
+                  <h2 className="text-sm font-semibold text-ink">{TASK_STATUS_LABELS[status]}</h2>
+                  <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-muted">
+                    {groupedTasks[status].length}
+                  </span>
+                </header>
+                <div className="space-y-2.5 min-h-[4rem]">
+                  {groupedTasks[status].length === 0 ? (
+                    <p className="rounded-xl border border-dashed border-line px-3 py-6 text-center text-xs text-muted">
+                      {dragTaskId ? "Drop the task here." : "No tasks here."}
+                    </p>
+                  ) : (
+                    groupedTasks[status].map(taskCard)
+                  )}
+                </div>
+              </section>
+              );
+            })}
+          </div>
         </div>
       ) : null}
 

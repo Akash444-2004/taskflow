@@ -7,6 +7,7 @@ import {
   LogOut,
   Menu,
   Moon,
+  Search,
   ShieldCheck,
   Sun,
   UserRound,
@@ -15,6 +16,7 @@ import {
 
 import Brand from "../Brand";
 import Avatar from "../ui/Avatar";
+import CommandPalette from "../ui/CommandPalette";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { cn } from "../../utils/format";
@@ -30,11 +32,25 @@ export default function AppLayout() {
   const { user, logout, isAdmin } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
+
+  // Global Ctrl+K / Cmd+K shortcut for the command palette.
+  useEffect(() => {
+    function onKeyDown(event) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((current) => !current);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const navItems = isAdmin
     ? [...NAV_ITEMS, { to: "/admin", label: "Administration", icon: ShieldCheck }]
@@ -132,6 +148,19 @@ export default function AppLayout() {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => setPaletteOpen(true)}
+              className="flex items-center gap-2 rounded-lg border border-line px-2.5 py-1.5 text-muted transition-colors hover:bg-surface-muted hover:text-ink"
+              aria-label="Quick search (Ctrl+K)"
+              title="Quick search (Ctrl+K)"
+            >
+              <Search className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden text-xs font-medium md:block">Search</span>
+              <kbd className="hidden rounded border border-line bg-surface-muted px-1.5 py-0.5 text-[10px] font-semibold md:block">
+                Ctrl K
+              </kbd>
+            </button>
+            <button
+              type="button"
               onClick={toggleTheme}
               className="rounded-lg border border-line p-2 text-muted transition-colors hover:bg-surface-muted hover:text-ink"
               aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
@@ -156,9 +185,13 @@ export default function AppLayout() {
         </header>
 
         <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-          <Outlet />
+          <div key={location.pathname} className="animate-fade-up">
+            <Outlet />
+          </div>
         </main>
       </div>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }

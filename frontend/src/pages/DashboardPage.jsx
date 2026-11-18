@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowRight,
+  ArrowUpRight,
   CalendarClock,
   CheckCircle2,
   FolderKanban,
@@ -11,15 +12,16 @@ import {
   Timer,
   Users
 } from "lucide-react";
-import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import PageHeader from "../components/ui/PageHeader";
 import Badge, { ProjectStatusBadge, TaskPriorityBadge, TaskStatusBadge } from "../components/ui/Badge";
 import EmptyState from "../components/ui/EmptyState";
-import Spinner from "../components/ui/Spinner";
+import Skeleton, { SkeletonStatCards } from "../components/ui/Skeleton";
 import { useAuth } from "../context/AuthContext";
 import { api, apiErrorMessage } from "../services/api";
-import { formatShortDate, percentage } from "../utils/format";
+import useCountUp from "../hooks/useCountUp";
+import { formatShortDate, percentage, TASK_STATUS_LABELS } from "../utils/format";
 
 const STATUS_COLORS = {
   TODO: "#94a3b8",
@@ -29,7 +31,23 @@ const STATUS_COLORS = {
 
 const STATUS_ORDER = ["TODO", "IN_PROGRESS", "COMPLETED"];
 
-function StatCard({ label, value, hint, icon: Icon, tone = "brand" }) {
+function StatusTooltip({ active, payload }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const entry = payload[0].payload;
+  return (
+    <div className="rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-float">
+      <p className="flex items-center gap-2 font-semibold text-ink">
+        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
+        {entry.label}
+      </p>
+      <p className="mt-1 text-muted">
+        {entry.value} {entry.value === 1 ? "task" : "tasks"} · {entry.percent}%
+      </p>
+    </div>
+  );
+}
+
+function StatCard({ label, value, hint, icon: Icon, tone = "brand", to }) {
   const tones = {
     brand: "bg-brand-soft/60 text-brand",
     info: "bg-info/10 text-info",
@@ -37,8 +55,8 @@ function StatCard({ label, value, hint, icon: Icon, tone = "brand" }) {
     danger: "bg-danger/10 text-danger"
   };
 
-  return (
-    <div className="rounded-card border border-line bg-surface p-5 shadow-card">
+  const body = (
+    <>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">{label}</p>
@@ -49,6 +67,30 @@ function StatCard({ label, value, hint, icon: Icon, tone = "brand" }) {
         </span>
       </div>
       {hint ? <p className="mt-3 text-xs text-muted">{hint}</p> : null}
+    </>
+  );
+
+  if (to) {
+    return (
+      <Link
+        to={to}
+        title={`Open ${label.toLowerCase()}`}
+        className="group block rounded-card border border-line bg-surface p-5 shadow-card transition-all hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-float"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">{body}</div>
+          <ArrowUpRight
+            className="mt-1 h-4 w-4 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100"
+            aria-hidden="true"
+          />
+        </div>
+      </Link>
+    );
+  }
+
+  return (
+    <div className="rounded-card border border-line bg-surface p-5 shadow-card">
+      {body}
     </div>
   );
 }
@@ -58,6 +100,7 @@ export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [activeStatus, setActiveStatus] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -81,13 +124,25 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const chartData = STATUS_ORDER.map((status) => ({
-    name: status,
-    value: data?.tasksByStatus?.[status] || 0,
-    color: STATUS_COLORS[status]
-  })).filter((entry) => entry.value > 0);
+  const total = data?.assignedTaskCount || 0;
+  const chartData = STATUS_ORDER.map((status) => {
+    const value = data?.tasksByStatus?.[status] || 0;
+    return {
+      name: status,
+      label: TASK_STATUS_LABELS[status],
+      value,
+      color: STATUS_COLORS[status]
+    };
+  })
+    .map((entry) => ({ ...entry, percent: percentage(entry.value, total) }))
+    .filter((entry) => entry.value > 0);
 
-  const completionRate = percentage(data?.completedTaskCount || 0, data?.assignedTaskCount || 0);
+  const activeEntry = chartData.find((entry) => entry.name === activeStatus) || null;
+  const completionRate = percentage(data?.completedTaskCount || 0, total);
+  const projectCount = useCountUp(data?.projectCount || 0);
+  const assignedCount = useCountUp(total);
+  const dueSoonCount = useCountUp(data?.dueSoonTaskCount || 0);
+  const overdueCount = useCountUp(data?.overdueTaskCount || 0);
 
   return (
     <div className="space-y-6">
@@ -106,8 +161,12 @@ export default function DashboardPage() {
       />
 
       {loading ? (
-        <div className="flex justify-center py-20">
-          <Spinner className="h-7 w-7" label="Loading dashboard" />
+        <div className="space-y-6">
+          <SkeletonStatCards />
+          <div className="grid gap-6 lg:grid-cols-3">
+            <Skeleton className="h-72 lg:col-span-2" />
+            <Skeleton className="h-72" />
+          </div>
         </div>
       ) : error ? (
         <div className="rounded-card border border-danger/25 bg-danger/5 p-6 text-sm text-danger">
@@ -118,31 +177,35 @@ export default function DashboardPage() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               label="My projects"
-              value={data.projectCount}
+              value={projectCount}
               hint="Projects you own or belong to"
               icon={FolderKanban}
               tone="brand"
+              to="/projects"
             />
             <StatCard
               label="Assigned tasks"
-              value={data.assignedTaskCount}
+              value={assignedCount}
               hint={`${data.completedTaskCount} completed · ${completionRate}% done`}
               icon={ListTodo}
               tone="info"
+              to="/tasks"
             />
             <StatCard
               label="Due this week"
-              value={data.dueSoonTaskCount}
+              value={dueSoonCount}
               hint="Tasks due in the next seven days"
               icon={CalendarClock}
               tone="success"
+              to="/tasks?due=soon"
             />
             <StatCard
               label="Overdue"
-              value={data.overdueTaskCount}
+              value={overdueCount}
               hint="Needs attention soon"
               icon={AlertTriangle}
               tone="danger"
+              to="/tasks?due=overdue"
             />
           </div>
 
@@ -213,43 +276,73 @@ export default function DashboardPage() {
                         <Pie
                           data={chartData}
                           dataKey="value"
-                          nameKey="name"
+                          nameKey="label"
                           innerRadius={52}
                           outerRadius={76}
                           paddingAngle={3}
                           stroke="none"
+                          onMouseEnter={(_, index) => setActiveStatus(chartData[index].name)}
+                          onMouseLeave={() => setActiveStatus(null)}
                         >
                           {chartData.map((entry) => (
-                            <Cell key={entry.name} fill={entry.color} />
+                            <Cell
+                              key={entry.name}
+                              fill={entry.color}
+                              fillOpacity={!activeStatus || activeStatus === entry.name ? 1 : 0.3}
+                              style={{ cursor: "pointer", outline: "none", transition: "fill-opacity 150ms" }}
+                            />
                           ))}
                         </Pie>
+                        <Tooltip content={<StatusTooltip />} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl font-semibold text-ink">{data.assignedTaskCount}</span>
-                      <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
-                        total
-                      </span>
+                      {activeEntry ? (
+                        <>
+                          <span className="text-2xl font-semibold text-ink">{activeEntry.value}</span>
+                          <span
+                            className="text-[11px] font-medium uppercase tracking-wide"
+                            style={{ color: activeEntry.color }}
+                          >
+                            {activeEntry.label} · {activeEntry.percent}%
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-2xl font-semibold text-ink">{total}</span>
+                          <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
+                            total
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
 
-                  <ul className="mt-5 space-y-2.5">
-                    {STATUS_ORDER.map((status) => (
-                      <li key={status} className="flex items-center justify-between gap-3 text-sm">
-                        <span className="flex items-center gap-2 text-muted">
-                          <span
-                            className="h-2.5 w-2.5 rounded-full"
-                            style={{ backgroundColor: STATUS_COLORS[status] }}
-                          />
-                          {status === "TODO"
-                            ? "To do"
-                            : status === "IN_PROGRESS"
-                              ? "In progress"
-                              : "Completed"}
-                        </span>
-                        <span className="font-semibold text-ink">
-                          {data.tasksByStatus?.[status] || 0}
-                        </span>
+                  <ul className="mt-5 space-y-1.5">
+                    {chartData.map((entry) => (
+                      <li key={entry.name}>
+                        <button
+                          type="button"
+                          onMouseEnter={() => setActiveStatus(entry.name)}
+                          onMouseLeave={() => setActiveStatus(null)}
+                          onFocus={() => setActiveStatus(entry.name)}
+                          onBlur={() => setActiveStatus(null)}
+                          className={`flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors ${
+                            activeStatus === entry.name ? "bg-surface-muted" : "hover:bg-surface-muted/60"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2 text-muted">
+                            <span
+                              className="h-2.5 w-2.5 rounded-full"
+                              style={{ backgroundColor: entry.color }}
+                            />
+                            {entry.label}
+                          </span>
+                          <span className="flex items-baseline gap-2">
+                            <span className="text-xs font-medium text-muted">{entry.percent}%</span>
+                            <span className="font-semibold text-ink">{entry.value}</span>
+                          </span>
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -320,7 +413,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line">
                           <div
-                            className="h-full rounded-full bg-brand"
+                            className="h-full rounded-full bg-brand transition-all duration-700 ease-out"
                             style={{ width: `${progress}%` }}
                           />
                         </div>
