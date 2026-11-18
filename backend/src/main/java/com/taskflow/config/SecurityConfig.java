@@ -49,7 +49,7 @@ import com.taskflow.security.SpaCsrfTokenRequestHandler;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
-@EnableConfigurationProperties({ JwtProperties.class, CookieProperties.class })
+@EnableConfigurationProperties({ JwtProperties.class, CookieProperties.class, RateLimitProperties.class })
 public class SecurityConfig {
 
     private static final int BCRYPT_STRENGTH = 12;

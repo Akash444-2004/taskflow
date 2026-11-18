@@ -41,7 +41,7 @@ spring:
     timeout-per-shutdown-phase: 20s
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${PORT:${SERVER_PORT:8080}}
   shutdown: graceful
   compression:
     enabled: true
@@ -54,6 +54,13 @@ server:
 
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    global-per-minute: ${RATE_LIMIT_GLOBAL_PER_MINUTE:120}
+    login-per-minute: ${RATE_LIMIT_LOGIN_PER_MINUTE:10}
+    register-per-minute: ${RATE_LIMIT_REGISTER_PER_MINUTE:3}
+    password-change-per-minute: ${RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE:5}
+    trust-forwarded-for: ${RATE_LIMIT_TRUST_FORWARDED_FOR:true}
   jwt:
     issuer: ${JWT_ISSUER:taskflow-api}
     secret: ${JWT_SECRET:}
