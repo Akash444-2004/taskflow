@@ -2,7 +2,7 @@
 
 TaskFlow is a collaborative project and task management application for small teams. It is a production-quality portfolio project built as a Spring Boot API, a PostgreSQL database, and a responsive React single-page application.
 
-> **Status: all ten phases complete.** Registration, authentication, projects, membership, tasks, comments, dashboards, administration, the full React interface, integration tests, and container/deployment configuration are implemented and verified. See [Verification](#verification).
+> **Status: all ten phases complete.** Registration, authentication, projects, membership, tasks, comments, dashboards, administration, the full React interface, integration tests, application-level rate limiting, and the Neon/Render/Vercel deployment configuration are implemented. See [Verification results](#verification-results).
 
 ## Features
 
@@ -12,6 +12,7 @@ TaskFlow is a collaborative project and task management application for small te
 - Rotating, hashed, revocable refresh sessions stored in PostgreSQL.
 - CSRF-protected cookie endpoints, BCrypt password hashing, password change with global session revocation.
 - Server-side role and project authorization on every request; JWT claims are never trusted for permissions.
+- Application-level rate limiting on login, registration, password change, and all API routes.
 
 **Projects and collaboration**
 
@@ -53,6 +54,7 @@ React 19 SPA (Vite, Tailwind, React Router)
   ▼
 Spring Boot 4.1 monolith
   ├── Controller → Bean Validation → Service → Repository
+  ├── Rate-limit filter (Bucket4j, per-IP)
   ├── Spring Security / JWT filter / CSRF chain
   ├── Flyway migrations
   └── JPA / Hibernate
@@ -72,7 +74,8 @@ This is deliberately a modular monolith with a separate SPA. There are no micros
 | Authentication | BCrypt (strength 12), HS512 JWT access tokens, rotating opaque refresh tokens |
 | Frontend | React 19, Vite 8, JavaScript, Tailwind CSS 3.4, React Router 7, Axios, Recharts, Lucide |
 | Testing | JUnit 5, Spring Boot Test, MockMvc, Vitest, React Testing Library |
-| Build | Maven Wrapper, npm, Docker / Docker Compose |
+| Security | Bucket4j token-bucket rate limiting, Spring Security, CSRF, BCrypt |
+| Build | Maven Wrapper, npm, Docker (Render) |
 
 ## Repository Layout
 
@@ -80,14 +83,14 @@ This is deliberately a modular monolith with a separate SPA. There are no micros
 taskflow/
 ├── backend/
 │   ├── src/main/java/com/taskflow/
-│   │   ├── config/          # Security, CORS, CSRF, JWT and cookie properties
+│   │   ├── config/          # Security, CORS, CSRF, JWT, cookie and rate-limit properties
 │   │   ├── controller/      # Thin REST controllers
 │   │   ├── dto/             # Request/response records grouped by feature
 │   │   ├── entity/          # JPA entities
 │   │   ├── enums/           # Roles, project/task status, priorities
 │   │   ├── exception/       # Domain exceptions and global error handler
 │   │   ├── repository/      # Spring Data repositories and projections
-│   │   ├── security/        # JWT filter, refresh cookies, entry points
+│   │   ├── security/        # JWT filter, rate limiter, refresh cookies, entry points
 │   │   └── service/         # Business logic and authorization
 │   ├── src/main/resources/
 │   │   ├── db/migration/    # V1 schema, V2 single-owner constraint
@@ -100,7 +103,7 @@ taskflow/
 │   │   ├── project/         # Project and membership rules
 │   │   ├── security/        # Authentication and session security
 │   │   └── task/            # Task rules and transitions
-│   ├── Dockerfile
+│   ├── Dockerfile           # Render builds this image
 │   ├── .dockerignore
 │   ├── .env.example
 │   └── pom.xml
@@ -109,6 +112,7 @@ taskflow/
 │   ├── src/
 │   │   ├── components/      # Layout, projects, tasks, UI primitives
 │   │   ├── context/         # Auth, theme, toast providers
+│   │   ├── hooks/           # Count-up animation hook
 │   │   ├── pages/           # Dashboard, projects, tasks, profile, admin, auth
 │   │   ├── services/        # Axios client, refresh interceptor, CSRF helpers
 │   │   ├── test/            # Vitest setup
@@ -116,12 +120,11 @@ taskflow/
 │   │   ├── App.jsx
 │   │   ├── index.css
 │   │   └── main.jsx
-│   ├── Dockerfile
-│   ├── nginx.conf
+│   ├── vercel.json          # Vercel: /api proxy to Render + SPA fallback
 │   └── package.json
-├── scripts/                 # Local PostgreSQL start/stop helpers
-├── docker-compose.yml
-├── .env.example             # Docker Compose environment template
+├── scripts/                 # Password-safe local run helpers
+├── .vscode/tasks.json       # One-click backend/frontend tasks
+├── render.yaml              # Render blueprint for the API
 └── README.md
 ```
 
@@ -131,7 +134,7 @@ taskflow/
 - Node.js 26 LTS (or a Vite-compatible supported Node release)
 - PostgreSQL 15+ for local development (PostgreSQL 18 is used in verification)
 - Git
-- Docker and Docker Compose for container deployment (optional)
+- Docker is only needed to build the backend image locally; Render builds it for you
 
 Maven does not need to be installed globally; the Maven Wrapper is included.
 
@@ -139,23 +142,15 @@ Maven does not need to be installed globally; the Maven Wrapper is included.
 
 ### 1. Database
 
-Development defaults use an isolated PostgreSQL cluster on `localhost:5433`.
-
-The repository includes setup helpers for Windows. If the cluster does not exist yet, follow the initialization steps in the script header or create a normal PostgreSQL database:
+Development uses your local PostgreSQL instance on `localhost:5432` (database `taskflow`, user `postgres`). Create the database once:
 
 ```sql
-CREATE ROLE taskflow WITH LOGIN PASSWORD 'choose-a-strong-password';
-CREATE DATABASE taskflow OWNER taskflow;
+CREATE DATABASE taskflow;
 ```
 
-After initial setup:
+The backend reads credentials from environment variables or from `backend/.env`, which is git-ignored. The run scripts prompt for the password, so it is never written to disk.
 
-```powershell
-.\scripts\start-dev-db.ps1
-.\scripts\stop-dev-db.ps1
-```
-
-The `.dev/` directory holds local database state and is git-ignored.
+Integration tests use a separate `taskflow_test` database (see below) so real data is never touched.
 
 ### 2. Run the stack
 
@@ -216,12 +211,12 @@ finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DB_URL` | `jdbc:postgresql://localhost:5433/taskflow` | JDBC connection URL |
-| `DB_USERNAME` | `taskflow` | Database user |
+| `DB_URL` | `jdbc:postgresql://localhost:5432/taskflow` | JDBC connection URL |
+| `DB_USERNAME` | `postgres` | Database user |
 | `DB_PASSWORD` | required | Database password |
-| `DB_POOL_MAX_SIZE` | `10` | Hikari maximum pool size |
-| `DB_POOL_MIN_IDLE` | `2` | Hikari minimum idle connections |
-| `SERVER_PORT` | `8080` | HTTP port |
+| `DB_POOL_MAX_SIZE` | `10` (local), `5` recommended on Neon | Hikari maximum pool size |
+| `DB_POOL_MIN_IDLE` | `2` (`1` on Render) | Hikari minimum idle connections |
+| `PORT` | `8080` | HTTP port injected by Render (`SERVER_PORT` also honoured) |
 | `FRONTEND_URL` | `http://localhost:5173` | Allowed CORS origin(s), comma-separated |
 | `JWT_SECRET` | required | Base64 secret, at least 512 bits |
 | `JWT_ISSUER` | `taskflow-api` | JWT issuer claim |
@@ -230,6 +225,12 @@ finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 | `COOKIE_SECURE` | `false` (local), `true` (prod profile) | Sets `Secure` on auth cookies |
 | `REFRESH_COOKIE_NAME` | `taskflow_refresh` | Refresh cookie name |
 | `REFRESH_COOKIE_PATH` | `/api/auth` | Refresh cookie path |
+| `RATE_LIMIT_ENABLED` | `true` | Master switch for application rate limiting |
+| `RATE_LIMIT_GLOBAL_PER_MINUTE` | `120` | Requests per minute per IP for all other `/api/*` routes |
+| `RATE_LIMIT_LOGIN_PER_MINUTE` | `10` | Login attempts per minute per IP |
+| `RATE_LIMIT_REGISTER_PER_MINUTE` | `3` | Registrations per minute per IP |
+| `RATE_LIMIT_PASSWORD_CHANGE_PER_MINUTE` | `5` | Password changes per minute per IP |
+| `RATE_LIMIT_TRUST_FORWARDED_FOR` | `true` | Use the first `X-Forwarded-For` hop (correct behind Render's proxy) |
 
 ### Frontend
 
@@ -237,9 +238,9 @@ finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 | --- | --- | --- |
 | `VITE_API_URL` | `/api` in the container build | Public API base URL; never place secrets in `VITE_*` |
 
-### Docker Compose
+### Deployment secrets
 
-The root `.env.example` documents `APP_PORT`, `POSTGRES_*`, `JWT_SECRET`, `FRONTEND_URL`, and `COOKIE_SECURE`.
+Production values live in the Render dashboard, never in the repository: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `FRONTEND_URL`, and the rate-limit overrides if you need them. `JWT_SECRET` is generated by `render.yaml` on first deploy.
 
 ## API Reference
 
@@ -324,7 +325,9 @@ Security is enforced in services and Spring Security, never only in the React in
 - Bean Validation, database constraints, and service checks protect data integrity.
 - Entity objects are never returned from controllers; request and response DTOs are explicit.
 - Production configuration fails fast if `JWT_SECRET` is missing or too short, and Flyway clean is disabled.
-- The bundled nginx configuration adds CSP, HSTS-compatible deployment guidance, frame denial, MIME sniffing protection, and a permissions policy.
+- In-process token-bucket rate limiting (Bucket4j) protects every `/api/*` route: 120 req/min per IP globally, 10/min on login, 3/min on register, and 5/min on password change. Exceeding a limit returns `429` with a `Retry-After` header and the standard JSON error body. Buckets are evicted after 10 minutes idle and capped at 20,000 tracked clients, so memory stays bounded under attack.
+- The limiter reads the first `X-Forwarded-For` hop, which is what Render's edge proxy provides, so limits apply per real client instead of per proxy.
+- Refusals happen before the Spring Security chain, so unauthenticated floods never reach password hashing or the database.
 
 ## Database
 
@@ -364,47 +367,77 @@ npm audit --audit-level=moderate
 
 - **46 backend tests pass** across authentication, persistence/schema, projects, tasks, comments, dashboard, and administration.
 - **12 frontend tests pass** across routing/guest guards, formatting utilities, badges, and modal behavior.
-- Production frontend build succeeds with lazy-loaded route chunks.
+- Production frontend build succeeds with route-level code splitting; the Recharts dashboard chart is its own chunk (~97 KB gzipped) and never loads on other routes.
 - `npm audit --audit-level=moderate` reports **0 vulnerabilities**.
 - Live runtime smoke test against the running API verified: health check, registration, project creation, task creation/assignment, comment creation, status transition, dashboard counts, and CSRF-protected refresh-token rotation.
 - Flyway migrations and Hibernate schema validation succeed against PostgreSQL 18.6.
 
-## Docker Deployment
+## Deployment: Neon → Render → Vercel
 
-The repository includes a multi-stage backend image, an nginx-served frontend image, and Docker Compose orchestration.
+The production topology is three managed services:
 
-1. Create the environment file:
+```text
+Browser
+  │  https://taskflow.vercel.app        (static SPA, same-origin /api calls)
+  ▼
+Vercel CDN ── rewrite /api/:path* ──▶ Render (Docker, Spring Boot) ──▶ Neon PostgreSQL
+```
 
-   ```powershell
-   Copy-Item .env.example .env
+Vercel proxies `/api/*` to Render so the browser only ever sees one origin. This is required, not cosmetic: the refresh cookie is `SameSite=Strict`, and a direct `vercel.app` → `onrender.com` request is cross-site, so the browser would drop the cookie and `XSRF-TOKEN` after the 15-minute access token expires. The rewrite keeps auth working with no code change.
+
+### 1. Database — Neon
+
+1. Create a project at [neon.tech](https://neon.tech) and open **Connection Details**.
+2. Copy the **pooled** connection string (the host contains `-pooler`) and convert it to JDBC form:
+
+   ```text
+   jdbc:postgresql://<host>-pooler.<region>.aws.neon.tech/taskflow?sslmode=require
    ```
 
-2. Set strong values for `POSTGRES_PASSWORD` and `JWT_SECRET` in `.env`. Generate `JWT_SECRET` with the PowerShell snippet above.
+3. Keep the database, role, and password Neon gives you — they are the `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` values for Render. Flyway creates the schema on first boot.
 
-3. Build and start:
+### 2. Backend — Render
 
-   ```powershell
-   docker compose up --build
+1. Push this repository to GitHub, then in Render choose **New → Blueprint** and select it. Render reads `render.yaml` (Docker service, `/api/health` health check, generated `JWT_SECRET`, `COOKIE_SECURE=true`, pool size 5).
+2. Fill the `sync: false` values: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, and `FRONTEND_URL` (your Vercel URL, e.g. `https://taskflow.vercel.app`).
+3. Deploy and confirm `https://<service>.onrender.com/api/health` returns `{"status":"UP", ...}`.
+4. On the free plan the service sleeps after ~15 minutes idle; the next request takes roughly a minute to wake.
+
+### 3. Frontend — Vercel
+
+1. Import the same repository in Vercel. Set **Root Directory** to `frontend`; the Vite preset builds to `dist`.
+2. Edit `frontend/vercel.json` and replace the placeholder host with your Render service URL (keep the `/api/:path*` suffix):
+
+   ```json
+   {
+     "rewrites": [
+       { "source": "/api/:path*", "destination": "https://your-service.onrender.com/api/:path*" },
+       { "source": "/(.*)", "destination": "/index.html" }
+     ]
+   }
    ```
 
-4. Open `http://localhost:8080`. nginx serves the SPA and proxies `/api` to the backend over the private Compose network.
+3. `VITE_API_URL` stays `/api`, so requests are same-origin and the proxy handles the rest.
+4. Deploy, then set Render's `FRONTEND_URL` to the final Vercel domain and redeploy the API so CORS and cookie policy match.
 
-5. Data persists in the `taskflow-db` volume.
+### Verifying the security controls in production
 
-Production notes:
+- Register and log in, then wait past the access-token lifetime and confirm the session refreshes (proves the same-origin proxy works).
+- The rate limiter needs no edge configuration. From one machine, eleven rapid `POST /api/auth/login` calls return `429` with `Retry-After`; registrations are capped at three per minute. Limits are overridable through the `RATE_LIMIT_*` environment variables documented above.
 
-- Terminate TLS at an edge proxy or load balancer, set `COOKIE_SECURE=true`, and set `FRONTEND_URL` to the public HTTPS origin.
-- Backend and database ports are not published by default; only nginx is exposed.
-- Set `SPRING_PROFILES_ACTIVE=prod` (already set by Compose) to enable secure cookies by default and forwarded-header handling.
-- Apply rate limiting for `/api/auth/login` and `/api/auth/register` at the edge proxy. Application-level distributed rate limiting is intentionally out of scope for this monolith.
-- Container definitions are included in the repository, but Docker was not installed on the verification workstation, so image builds were not executed here.
+### Free-tier notes
+
+- **Neon** scales to zero; the first query after idle adds a few hundred milliseconds.
+- **Render** free instances sleep after inactivity (~1 minute cold start). A paid instance removes this.
+- **Vercel Hobby** is sufficient for a static SPA plus rewrites.
 
 ## Known Limitations
 
 - No email verification, password reset, file attachments, or real-time updates.
 - Switching between board and list views is client-driven; tasks are loaded with a bounded page size for project boards.
 - Refresh sessions are stored in PostgreSQL; this design targets a single API deployment or a shared database, not per-node in-memory state.
-- Email delivery, observability exporters, and edge rate limiting are deployment concerns rather than bundled features.
+- Rate-limit buckets are in-memory, so they apply per API instance. Moving to multiple API replicas would require a shared store such as Redis.
+- Email delivery and observability exporters are deployment concerns rather than bundled features.
 
 ## Roadmap
 

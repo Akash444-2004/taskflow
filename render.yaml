@@ -1,0 +1,40 @@
+# Render Blueprint for the TaskFlow API.
+# 1. Push this repository to GitHub.
+# 2. In Render: New -> Blueprint -> pick this repository.
+# 3. Fill in the sync:false values (they belong to your Neon database).
+# The free plan spins down after inactivity; the first request then takes ~1 minute.
+
+services:
+  - type: web
+    name: taskflow-api
+    runtime: docker
+    plan: free
+    # Pick the region closest to your Neon database to keep query latency low.
+    region: singapore
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      # Neon pooled connection string, e.g.
+      # jdbc:postgresql://<host>-pooler.region.aws.neon.tech/taskflow?sslmode=require
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      # Small pool: Neon limits concurrent connections per branch.
+      - key: DB_POOL_MAX_SIZE
+        value: 5
+      - key: DB_POOL_MIN_IDLE
+        value: 1
+      - key: JWT_SECRET
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: true
+      # The public Vercel origin (used for CORS and the refresh cookie policy).
+      - key: FRONTEND_URL
+        sync: false
