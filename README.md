@@ -381,17 +381,17 @@ Two GitHub Actions workflows run on every push to `main` and on pull requests th
 
 | Workflow | What it does | Typical duration |
 | --- | --- | --- |
-| `.github/workflows/backend.yml` | Starts a throwaway PostgreSQL 18 service container, runs all backend integration and unit tests with the Maven Wrapper, packages the jar, and uploads surefire reports when a test fails | ~3–5 min |
-| `.github/workflows/frontend.yml` | `npm ci`, Vitest unit tests, production Vite build, and `npm audit --audit-level=moderate` | ~1–2 min |
+| `.github/workflows/backend.yml` | Starts a throwaway PostgreSQL 18 service container, runs all backend integration and unit tests with the Maven Wrapper, packages the jar, and uploads surefire reports when a test fails | ~1.5 min warm |
+| `.github/workflows/frontend.yml` | `npm ci`, Vitest unit tests, production Vite build, and `npm audit --audit-level=moderate` | ~30 s warm |
 
 Path filters keep the pipelines fast: backend pushes do not rebuild the frontend and vice versa. The Maven dependency cache and the npm cache are keyed off `pom.xml` and `package-lock.json`, so repeat runs start warm. The Maven wrapper is committed with the executable bit set, so `./mvnw` works on Linux runners without extra setup.
 
 ### Verification results
 
-- **46 backend tests pass** across authentication, persistence/schema, projects, tasks, comments, dashboard, and administration.
+- **49 backend tests pass** (46 integration tests across authentication, persistence/schema, projects, tasks, comments, dashboard, and administration, plus 3 rate-limit unit tests).
 - **12 frontend tests pass** across routing/guest guards, formatting utilities, badges, and modal behavior.
-- **3 rate-limit unit tests pass**, and the limiter was verified on the live deployment: three registrations from one IP returned `400`, the fourth returned `429`.
 - Live Render + Neon deployment verified: `/api/health` reports `UP`.
+- Rate limiting verified in production: three registrations from one IP returned `400`, the fourth returned `429`.
 - CI runs the full backend suite against a disposable PostgreSQL 18 service and the frontend tests, production build, and dependency audit on every relevant push.
 - Production frontend build succeeds with route-level code splitting; the Recharts dashboard chart is its own chunk (~97 KB gzipped) and never loads on other routes.
 - `npm audit --audit-level=moderate` reports **0 vulnerabilities**.
