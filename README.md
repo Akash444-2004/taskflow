@@ -1,6 +1,14 @@
-# TaskFlow
+# TaskFlow – Collaborative Project & Task Management
 
-TaskFlow is a collaborative project and task management application for small teams. It is a production-quality portfolio project built as a Spring Boot API, a PostgreSQL database, and a responsive React single-page application.
+[![Live Demo](https://img.shields.io/badge/Live-Demo-2ea44f?style=flat-square)](https://taskflow-delta-henna.vercel.app)
+![Database](https://img.shields.io/badge/Database-PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat-square&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?style=flat-square&logo=springboot&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
+
+🌐 **Live Application:** https://taskflow-delta-henna.vercel.app
+
+TaskFlow is a production-deployed, full-stack project and task management application for small teams: a Spring Boot API, a PostgreSQL database, and a responsive React single-page application.
 
 > **Status: all ten phases complete.** Registration, authentication, projects, membership, tasks, comments, dashboards, administration, the full React interface, integration tests, application-level rate limiting, and the Neon/Render/Vercel deployment configuration are implemented. See [Verification results](#verification-results).
 
