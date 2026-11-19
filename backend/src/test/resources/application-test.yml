@@ -17,3 +17,8 @@ app:
     secure: false
     refresh-name: taskflow_refresh
     refresh-path: /api/auth
+  # Integration tests originate from a single MockMvc address and would trip the
+  # per-IP limiter (registration allows three per minute). Limiter behaviour has
+  # dedicated unit tests in RateLimitFilterTest.
+  rate-limit:
+    enabled: false
