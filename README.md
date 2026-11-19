@@ -328,6 +328,7 @@ Security is enforced in services and Spring Security, never only in the React in
 - In-process token-bucket rate limiting (Bucket4j) protects every `/api/*` route: 120 req/min per IP globally, 10/min on login, 3/min on register, and 5/min on password change. Exceeding a limit returns `429` with a `Retry-After` header and the standard JSON error body. Buckets are evicted after 10 minutes idle and capped at 20,000 tracked clients, so memory stays bounded under attack.
 - The limiter reads the first `X-Forwarded-For` hop, which is what Render's edge proxy provides, so limits apply per real client instead of per proxy.
 - Refusals happen before the Spring Security chain, so unauthenticated floods never reach password hashing or the database.
+- Vercel serves the SPA with a Content Security Policy, HSTS, frame denial, MIME-sniffing protection and a permissions policy, configured in `frontend/vercel.json`.
 
 ## Database
 
@@ -367,6 +368,8 @@ npm audit --audit-level=moderate
 
 - **46 backend tests pass** across authentication, persistence/schema, projects, tasks, comments, dashboard, and administration.
 - **12 frontend tests pass** across routing/guest guards, formatting utilities, badges, and modal behavior.
+- **3 rate-limit unit tests pass**, and the limiter was verified on the live deployment: three registrations from one IP returned `400`, the fourth returned `429`.
+- Live Render + Neon deployment verified: `/api/health` reports `UP`.
 - Production frontend build succeeds with route-level code splitting; the Recharts dashboard chart is its own chunk (~97 KB gzipped) and never loads on other routes.
 - `npm audit --audit-level=moderate` reports **0 vulnerabilities**.
 - Live runtime smoke test against the running API verified: health check, registration, project creation, task creation/assignment, comment creation, status transition, dashboard counts, and CSRF-protected refresh-token rotation.
@@ -406,12 +409,12 @@ Vercel proxies `/api/*` to Render so the browser only ever sees one origin. This
 ### 3. Frontend — Vercel
 
 1. Import the same repository in Vercel. Set **Root Directory** to `frontend`; the Vite preset builds to `dist`.
-2. Edit `frontend/vercel.json` and replace the placeholder host with your Render service URL (keep the `/api/:path*` suffix):
+2. `frontend/vercel.json` already proxies `/api/*` to the deployed Render service. If that service URL ever changes, update the `destination` (keep the `/api/:path*` suffix):
 
    ```json
    {
      "rewrites": [
-       { "source": "/api/:path*", "destination": "https://your-service.onrender.com/api/:path*" },
+       { "source": "/api/:path*", "destination": "https://taskflow-api-ycpp.onrender.com/api/:path*" },
        { "source": "/(.*)", "destination": "/index.html" }
      ]
    }
