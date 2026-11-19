@@ -5,6 +5,8 @@
 ![Java](https://img.shields.io/badge/Java-21-ED8B00?style=flat-square&logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?style=flat-square&logo=springboot&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
+[![Backend CI](https://github.com/Akash444-2004/taskflow/actions/workflows/backend.yml/badge.svg?branch=main)](https://github.com/Akash444-2004/taskflow/actions/workflows/backend.yml)
+[![Frontend CI](https://github.com/Akash444-2004/taskflow/actions/workflows/frontend.yml/badge.svg?branch=main)](https://github.com/Akash444-2004/taskflow/actions/workflows/frontend.yml)
 
 🌐 **Live Application:** https://taskflow-delta-henna.vercel.app
 
@@ -83,7 +85,7 @@ This is deliberately a modular monolith with a separate SPA. There are no micros
 | Frontend | React 19, Vite 8, JavaScript, Tailwind CSS 3.4, React Router 7, Axios, Recharts, Lucide |
 | Testing | JUnit 5, Spring Boot Test, MockMvc, Vitest, React Testing Library |
 | Security | Bucket4j token-bucket rate limiting, Spring Security, CSRF, BCrypt |
-| Build | Maven Wrapper, npm, Docker (Render) |
+| Build | Maven Wrapper, npm, Docker (Render), GitHub Actions |
 
 ## Repository Layout
 
@@ -130,6 +132,7 @@ taskflow/
 │   │   └── main.jsx
 │   ├── vercel.json          # Vercel: /api proxy to Render + SPA fallback
 │   └── package.json
+├── .github/workflows/       # Backend and frontend CI pipelines
 ├── scripts/                 # Password-safe local run helpers
 ├── .vscode/tasks.json       # One-click backend/frontend tasks
 ├── render.yaml              # Render blueprint for the API
@@ -372,12 +375,24 @@ npm run build
 npm audit --audit-level=moderate
 ```
 
+### Continuous integration
+
+Two GitHub Actions workflows run on every push to `main` and on pull requests that touch the relevant paths. Both use the read-only `GITHUB_TOKEN`, cancel superseded runs on the same branch, and have hard timeouts.
+
+| Workflow | What it does | Typical duration |
+| --- | --- | --- |
+| `.github/workflows/backend.yml` | Starts a throwaway PostgreSQL 18 service container, runs all backend integration and unit tests with the Maven Wrapper, packages the jar, and uploads surefire reports when a test fails | ~3–5 min |
+| `.github/workflows/frontend.yml` | `npm ci`, Vitest unit tests, production Vite build, and `npm audit --audit-level=moderate` | ~1–2 min |
+
+Path filters keep the pipelines fast: backend pushes do not rebuild the frontend and vice versa. The Maven dependency cache and the npm cache are keyed off `pom.xml` and `package-lock.json`, so repeat runs start warm. The Maven wrapper is committed with the executable bit set, so `./mvnw` works on Linux runners without extra setup.
+
 ### Verification results
 
 - **46 backend tests pass** across authentication, persistence/schema, projects, tasks, comments, dashboard, and administration.
 - **12 frontend tests pass** across routing/guest guards, formatting utilities, badges, and modal behavior.
 - **3 rate-limit unit tests pass**, and the limiter was verified on the live deployment: three registrations from one IP returned `400`, the fourth returned `429`.
 - Live Render + Neon deployment verified: `/api/health` reports `UP`.
+- CI runs the full backend suite against a disposable PostgreSQL 18 service and the frontend tests, production build, and dependency audit on every relevant push.
 - Production frontend build succeeds with route-level code splitting; the Recharts dashboard chart is its own chunk (~97 KB gzipped) and never loads on other routes.
 - `npm audit --audit-level=moderate` reports **0 vulnerabilities**.
 - Live runtime smoke test against the running API verified: health check, registration, project creation, task creation/assignment, comment creation, status transition, dashboard counts, and CSRF-protected refresh-token rotation.
